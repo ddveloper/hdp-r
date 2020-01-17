@@ -11,137 +11,154 @@ library(xtable)
 library(plyr)
 library(hdpr)
 library(data.table)
+library(shiny.i18n) #for localization
+
+# for multi-language support
+translator <- Translator$new(translation_csvs_path = "../locales")
 
 # Define UI for application that draws a histogram
 ui <- fluidPage(
 
   # Application title
   titlePanel("HDM Builder"),
-
-  sidebarLayout(
-    sidebarPanel(
-      uiOutput("uiUserMessages"),
-
-      wellPanel(
-        textInput("txtModelName","Model Name",placeholder = "The name of your model"),
-        textInput("txtDecison","Decision", placeholder = "Whatever you're trying to decide"),
-        textInput("txtCriteria","Criteria", placeholder = "i.e.) criteria1,2, etc"),
-        uiOutput("uiDynaFactors")
-      ),
-      wellPanel(
-        textInput("txtAlternatives", "Alternatives", placeholder = "i.e.) alternative 1, 2, etc"),
-        actionButton("btnUpdateAlternatives", "Update Alternatives")
-      )
-    ),
-
-    # Show a plot of the generated distribution
-    mainPanel(
-      tabsetPanel(
-        tabPanel("My Models",
-                 p("Enter your email and make up a pin so anything you
-                   save gets associated to you."),
-                 textInput("txtUserEmail", "Email", placeholder = "ex: you@domain.com"),
-                 textInput("txtUserPin", "Pin", placeholder = "4 digit pin, ex: 1234"),
-                 actionButton("btnLoadModels", "Load my models"),
-                 h4("List of all previous models"),
-                 uiOutput("uiDynaModels"),
-                 verbatimTextOutput("modelSelectInfo"),
-                 dataTableOutput(outputId = "dtMongoOutput")
-        ),
-
-        tabPanel("Model Designer",
-                 wellPanel(
-                   h4("Decision Tree"),
-                   actionButton("btnSaveModel", "Save Model"),
-                   actionButton("btnRebuildTree", "Rebuild Tree From Form"),
-                   actionButton("btnLoadExample", "Load Example")
-                 ),
-                 grVizOutput("xx"),
-                 wellPanel(
-                   h3("Alternatives"),
-                   uiOutput("uiDynaAlternatives")
-                 )
-        ),
-        tabPanel("Experts",
-                 h4("Add or remove experts here"),
-                 p("After you've saved your model you can add some experts. Each
-                   expert will have a specific URL where they will rate your model,
-                   if you need to manually send a URL make sure to use the correct one."),
-                 uiOutput("uiExperts"),
-                 textInput("txtNewExpert", "New Expert", placeholder = "enter email here..."),
-                 actionButton("btnUpdateExperts","Update Experts"),
-                 actionButton("btnAddNewExpert","Add New")
-        ),
-        tabPanel("Evaluation Form",
-                 h4("This is the form your experts will fill out"),
-                 p("Your experts will see a form like this, you don't have to do anything
-                   here."),
-                 uiOutput("uiEvaluateCriteria")
-        ),
-        tabPanel("Results",
-                 h4("Expert Evaluations"),
-                 actionButton("btnLoadResults","Load Results"),
-                 dataTableOutput("tblResults"),
-                 dataTableOutput("tblSummaryResults"),
-                 uiOutput("uiIndividualExperts")
-        ),
-        tabPanel("Instructions",
-                 h4("Welcome to the HDM Admin tool, here is how to use it."),
-                 tags$ol(
-                   tags$li("Design your model."),
-                   tags$li("Find some experts to help you evaluate the model."),
-                   tags$li("Send your experts an evaluation to weight your options."),
-                   tags$li("Use the results for your research.")
-                 ),
-                 h4("My Models"),
-                 p("Before you do anything enter your email and a pin that you will remeber
-                   on the My Models screen. Everything you save in the tool will be
-                   associated with that email and that pin. If you don't have anything
-                   in the field when you save it you will probably loose your work!"),
-                 h4("Model Designer"),
-                 p("The model designer has 2 parts, the visual model as a tree and
-                   the form on the left to design the model. If you want to see a
-                   quick example just click the 'Load Example' button to see what
-                   the form and tree look like with a small model."),
-                 p("To create a model first you need a name and decision. The first
-                   level of the tree is your criteria. Note that this is a comma
-                   seperated list of criteria, so to add more criteria simply add
-                   a comma and the next criteria and click 'rebuild tree from form'."),
-                 p("Once your first level is set you can add sub critiera by adding
-                   comma seperated elements for each critiera. Every time you add some
-                   new elements just click the 'rebuild tree from form' button again
-                   to see your model as a tree. For each level in the tree you add you'll
-                   see a new tab on the form that you can click on and update."),
-                 p("The bottom of the form has Alternatives which are recommended but
-                   not required. In whatever you're trying to decide the alternatives
-                   are the different choices."),
-                 h4("Experts"),
-                 p("The Experts tab is where you can manage your experts. To add a new
-                   expert put in the email of the expert and click 'Add New'. When
-                   you're done make sure you click the 'Update Experts' button too. If you
-                   need to update an experts email just change it and click update experts."),
-                 p("Each expert will get a unique URL to use to evaluate the model you've
-                   created. When you add an expert the link will shown under the expert,
-                   make sure you send that URL to the expert to evaluate the model to ensure
-                   results are collected accurately."),
-                 h4("Evaluation Form"),
-                 p("Once you have designed a model the evaluation form is generated. This is
-             for you to see what your experts see, it won't actually evaluate anything. You can
-                   also click on the links on the expert tab to see what experts will see."),
-                 h4("Results"),
-                 p("Once your model has been evaluated results will be here."),
-                 h4("Saved Models"),
-                 p("As you're working on a model you should be saving it. To load a model
-                   just got to this tab, enter the email and pin you used to save the model,
-                   and load it up.")
-        )
-      )
-    )
-  )
+  uiOutput("page_content")
 )
 
 # Define server logic required to draw a histogram
 server <- function(input, output, session) {
+
+  i18n <- reactive({
+    selected <- input$selected_language
+    if (length(selected) > 0 && selected %in% translator$languages) {
+      translator$set_translation_language(selected)
+    }
+    translator
+  })
+
+  output$page_content <- renderUI({
+    tagList(
+      sidebarLayout(
+        sidebarPanel(
+          uiOutput("uiUserMessages"),
+
+          selectInput('selected_language',
+                      i18n()$t("Change language"),
+                      choices = translator$languages,
+                      selected = input$selected_language),
+          wellPanel(
+            textInput("txtModelName",i18n()$t("Model Name"),placeholder = i18n()$t("The name of your model")),
+            textInput("txtDecison",i18n()$t("Decision"), placeholder = i18n()$t("Whatever you're trying to decide")),
+            textInput("txtCriteria",i18n()$t("Criteria"), placeholder = i18n()$t("i.e.) criteria1,2, etc")),
+            uiOutput("uiDynaFactors")
+          ),
+          wellPanel(
+            textInput("txtAlternatives", i18n()$t("Alternatives"), placeholder = i18n()$t("i.e.) alternative 1, 2, etc")),
+            actionButton("btnUpdateAlternatives", i18n()$t("Update Alternatives"))
+          ),
+        ),
+
+        # Show a plot of the generated distribution
+        mainPanel(
+          tabsetPanel(
+            tabPanel(i18n()$t("My Models"),
+                     p("Enter your email and make up a pin so anything you save gets associated to you."),
+                     textInput("txtUserEmail", i18n()$t("Email"), placeholder = i18n()$t("ex: you@domain.com")),
+                     textInput("txtUserPin", i18n()$t("Pin"), placeholder = i18n()$t("4 digit pin, ex: 1234")),
+                     actionButton("btnLoadModels", i18n()$t("Load my models")),
+                     h4(i18n()$t("List of all previous models")),
+                     uiOutput("uiDynaModels"),
+                     verbatimTextOutput("modelSelectInfo"),
+                     dataTableOutput(outputId = "dtMongoOutput")
+            ),
+
+            tabPanel(i18n()$t("Model Designer"),
+                     wellPanel(
+                       h4(i18n()$t("Decision Tree")),
+                       actionButton("btnSaveModel", i18n()$t("Save Model")),
+                       actionButton("btnRebuildTree", i18n()$t("Rebuild Tree From Form")),
+                       actionButton("btnLoadExample", i18n()$t("Load Example"))
+                     ),
+                     grVizOutput("xx"),
+                     wellPanel(
+                       h3(i18n()$t("Alternatives")),
+                       uiOutput("uiDynaAlternatives")
+                     )
+            ),
+            tabPanel(i18n()$t("Experts"),
+                     h4(i18n()$t("Add or remove experts here")),
+                     p("After you've saved your model you can add some experts. Each expert will have a specific URL where they will rate your model, if you need to manually send a URL make sure to use the correct one."),
+                     uiOutput("uiExperts"),
+                     textInput("txtNewExpert", i18n()$t("New Expert"), placeholder = i18n()$t("enter email here...")),
+                     actionButton("btnUpdateExperts",i18n()$t("Update Experts")),
+                     actionButton("btnAddNewExpert",i18n()$t("Add New"))
+            ),
+            tabPanel(i18n()$t("Evaluation Form"),
+                     h4(i18n()$t("This is the form your experts will fill out")),
+                     p("Your experts will see a form like this, you don't have to do anything here."),
+                     uiOutput("uiEvaluateCriteria")
+            ),
+            tabPanel(i18n()$t("Results"),
+                     h4(i18n()$t("Expert Evaluations")),
+                     actionButton("btnLoadResults",i18n()$t("Load Results")),
+                     dataTableOutput("tblResults"),
+                     dataTableOutput("tblSummaryResults"),
+                     uiOutput("uiIndividualExperts")
+            ),
+            tabPanel(i18n()$t("Instructions"),
+                     h4("Welcome to the HDM Admin tool, here is how to use it."),
+                     tags$ol(
+                       tags$li("Design your model."),
+                       tags$li("Find some experts to help you evaluate the model."),
+                       tags$li("Send your experts an evaluation to weight your options."),
+                       tags$li("Use the results for your research.")
+                     ),
+                     h4("My Models"),
+                     p("Before you do anything enter your email and a pin that you will remeber
+                   on the My Models screen. Everything you save in the tool will be
+                   associated with that email and that pin. If you don't have anything
+                   in the field when you save it you will probably loose your work!"),
+                     h4("Model Designer"),
+                     p("The model designer has 2 parts, the visual model as a tree and
+                   the form on the left to design the model. If you want to see a
+                   quick example just click the 'Load Example' button to see what
+                   the form and tree look like with a small model."),
+                     p("To create a model first you need a name and decision. The first
+                   level of the tree is your criteria. Note that this is a comma
+                   seperated list of criteria, so to add more criteria simply add
+                   a comma and the next criteria and click 'rebuild tree from form'."),
+                     p("Once your first level is set you can add sub critiera by adding
+                   comma seperated elements for each critiera. Every time you add some
+                   new elements just click the 'rebuild tree from form' button again
+                   to see your model as a tree. For each level in the tree you add you'll
+                   see a new tab on the form that you can click on and update."),
+                     p("The bottom of the form has Alternatives which are recommended but
+                   not required. In whatever you're trying to decide the alternatives
+                   are the different choices."),
+                     h4("Experts"),
+                     p("The Experts tab is where you can manage your experts. To add a new
+                   expert put in the email of the expert and click 'Add New'. When
+                   you're done make sure you click the 'Update Experts' button too. If you
+                   need to update an experts email just change it and click update experts."),
+                     p("Each expert will get a unique URL to use to evaluate the model you've
+                   created. When you add an expert the link will shown under the expert,
+                   make sure you send that URL to the expert to evaluate the model to ensure
+                   results are collected accurately."),
+                     h4("Evaluation Form"),
+                     p("Once you have designed a model the evaluation form is generated. This is
+             for you to see what your experts see, it won't actually evaluate anything. You can
+                   also click on the links on the expert tab to see what experts will see."),
+                     h4("Results"),
+                     p("Once your model has been evaluated results will be here."),
+                     h4("Saved Models"),
+                     p("As you're working on a model you should be saving it. To load a model
+                   just got to this tab, enter the email and pin you used to save the model,
+                   and load it up.")
+            )
+          )
+        )
+      )
+    )
+  })
 
   #reactive values used through the app
   hdp=reactiveValues(tree=NULL,criteria=NULL,factors=NULL,criteriaCombos=NULL,
