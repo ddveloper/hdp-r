@@ -9,49 +9,71 @@ library(DiagrammeR) #display the tree
 library(DT)         #interface for selecting models from the DB
 library(rjson)      #gives us more flexibility for storing and loading models
 library(hdpr)       #core modules
+library(shiny.i18n) #for localization
+
+# for multi-language support
+translator <- Translator$new(translation_csvs_path = "../locales")
 
 ui <- fluidPage(
 
    titlePanel("HDP Model Evaluation"),
-   tabsetPanel(
-      tabPanel("Instructions",
-        h3("Instructions"),
-        p("If you have been invited to this page you are an expert in your field and we
+   uiOutput("page_content")
+)
+
+server <- function(input, output, session) {
+
+  i18n <- reactive({
+    selected <- input$selected_language
+    if (length(selected) > 0 && selected %in% translator$languages) {
+      translator$set_translation_language(selected)
+    }
+    translator
+  })
+
+  output$page_content <- renderUI({
+    tagList(
+      selectInput('selected_language',
+                  i18n()$t("Change language"),
+                  choices = translator$languages,
+                  selected = input$selected_language),
+      tabsetPanel(
+        tabPanel(i18n()$t("Instructions"),
+                 h3("Instructions"),
+                 p("If you have been invited to this page you are an expert in your field and we
           greatly appreciate the time you're taking to give your input - Thanks!
           To get started click the button at the bottom and then click on the
           Comparisons tab to complete your evaluation."),
-        p("This evaluation is part of the Hierarchical Decision Making (HDM) method.
+                 p("This evaluation is part of the Hierarchical Decision Making (HDM) method.
           In this method a decision has been broken down into it's elements as a tree
           and you have been asked to compare each element in the tree against the others in
           proportion of their relative importance to the objective. Use the sliders
           on the Comparisons page to rate each pair. For example:"),
-        tags$ul(
-          tags$li("If A is 3 times as important as B, A gets 75 points, B gets 25 points"),
-          tags$li("If the importance of A and B are the same, both get 50 points. This is
+                 tags$ul(
+                   tags$li("If A is 3 times as important as B, A gets 75 points, B gets 25 points"),
+                   tags$li("If the importance of A and B are the same, both get 50 points. This is
              the case regardless of whether both are extremely important, mildly important
              or unimportant."),
-          tags$li("If A is ¼ as important as B, A gets 20 points, B gets 80 points."),
-          tags$li("Zero is not used in the pairwise comparisons. If the importance of
+                   tags$li("If A is ¼ as important as B, A gets 20 points, B gets 80 points."),
+                   tags$li("Zero is not used in the pairwise comparisons. If the importance of
              A is negligible in comparison to B, A gets 1 point, B gets 99 points. ")
+                 ),
+                 actionButton("btnLoadFromQueryString", i18n()$t("Ready? Load the evaluations!"))
         ),
-        actionButton("btnLoadFromQueryString", "Ready? Load the evaluations!")
-      ),
-      # Show a plot of the generated distribution
-      tabPanel("Comparisons",
-        h4("Compare each item against the other"),
-        fluidRow(
-          column(4, uiOutput("uiEvaluateCriteria")),
-          column(8,
-                 actionButton("btnSaveAndCalculate", "Submit your evaluation"),
-                 uiOutput("uiMessages"),
-                 grVizOutput("modelTree")
-          )
+        # Show a plot of the generated distribution
+        tabPanel(i18n()$t("Comparisons"),
+                 h4("Compare each item against the other"),
+                 fluidRow(
+                   column(4, uiOutput("uiEvaluateCriteria")),
+                   column(8,
+                          actionButton("btnSaveAndCalculate", i18n()$t("Submit your evaluation")),
+                          uiOutput("uiMessages"),
+                          grVizOutput("modelTree")
+                   )
+                 )
         )
       )
-   )
-)
-
-server <- function(input, output, session) {
+    )
+  })
 
   hdp=reactiveValues(tree=NULL, alternatives=NULL, evaluationId=NULL,
                      expertId=NULL, modelId=NULL)
